@@ -1,5 +1,7 @@
 import { Dexie, type EntityTable } from 'dexie'
 import type { BoutResult, FencerId } from './domain/bout'
+import { moveToPool } from './domain/pools'
+import { cleanName, nameKey } from './names'
 
 export const weapons = ['epee', 'foil', 'sabre'] as const
 export type Weapon = (typeof weapons)[number]
@@ -35,6 +37,7 @@ export interface Retirement {
 export interface Fencer {
   id: FencerId
   name: string
+  club?: string // необязательно; одноклубников по возможности разводим по разным пулькам
   retired?: Retirement
 }
 
@@ -58,13 +61,41 @@ export interface Tournament {
   pristine?: boolean
 }
 
+// Банк клубов для быстрого выбора у бойцов; key — имя без учёта регистра и лишних пробелов.
+export interface Club {
+  key: string
+  name: string
+}
+
 export const db = new Dexie('fencing') as Dexie & {
   tournaments: EntityTable<Tournament, 'id'>
+  clubs: EntityTable<Club, 'key'>
 }
 
 db.version(1).stores({
   tournaments: 'id, createdAt',
 })
+db.version(2).stores({
+  tournaments: 'id, createdAt',
+  clubs: 'key, name',
+})
+
+// Добавляет клубы, которых ещё нет в банке (написание сохраняется как ввели первым).
+export async function addClubs(names: Array<string | undefined>) {
+  const clubs = names.map((n) => cleanName(n ?? '')).filter(Boolean)
+  if (clubs.length === 0) return
+  const existing = new Set(await db.clubs.toCollection().primaryKeys())
+  const fresh = new Map<string, Club>()
+  for (const name of clubs) {
+    const key = nameKey(name)
+    if (!existing.has(key) && !fresh.has(key)) fresh.set(key, { key, name })
+  }
+  if (fresh.size) await db.clubs.bulkAdd([...fresh.values()])
+}
+
+export function deleteClub(key: string) {
+  return db.clubs.delete(key)
+}
 
 // Дополняет записи, сохранённые старыми версиями приложения.
 export function normalize(t: Partial<Tournament> & Pick<Tournament, 'id'>): Tournament {
@@ -115,6 +146,14 @@ export function restoreFencer(id: string, fencerId: FencerId) {
   return modifyTournament(id, (t) => {
     const f = t.fencers.find((x) => x.id === fencerId)
     if (f) delete f.retired
+  })
+}
+
+// Перенос между пульками — только пока не введено ни одного боя.
+export function moveFencerToPool(id: string, fencerId: FencerId, target: number) {
+  return modifyTournament(id, (t) => {
+    if (t.poolBouts.length > 0 || t.tableau) return
+    t.pools = moveToPool(t.pools, fencerId, target)
   })
 }
 

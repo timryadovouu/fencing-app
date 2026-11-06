@@ -1,6 +1,7 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useEffect, useRef } from 'react'
 import { AppSettings } from '../components/AppSettings'
+import { ClubBankButton } from '../components/ClubBank'
 import { createTournament, db, deletePristine, normalize, type Tournament } from '../db'
 import { statusText } from '../derive'
 import { importBackup } from '../export'
@@ -67,6 +68,7 @@ export function Home() {
         <button className="secondary wide" onClick={() => fileInput.current?.click()}>
           {L.openFile}
         </button>
+        <ClubBankButton />
         <input
           ref={fileInput}
           type="file"

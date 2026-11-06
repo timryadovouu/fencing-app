@@ -2,7 +2,6 @@ import react from "@vitejs/plugin-react";
 import { VitePWA } from "vite-plugin-pwa";
 import { defineConfig } from "vitest/config";
 
-// https://vite.dev/config/
 export default defineConfig({
   plugins: [
     react(),
@@ -34,14 +33,12 @@ export default defineConfig({
       workbox: {
         globPatterns: ["**/*.{js,css,html,svg,png,ico,webmanifest}"],
         navigateFallback: "/index.html",
-        // pdfmake со шрифтом весит больше стандартного лимита — нужен офлайн тоже.
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
       },
     }),
   ],
   server: { host: true, allowedHosts: [".local"] },
   preview: { host: true, allowedHosts: [".local"] },
-  // pdfmake (~1 МБ) грузится отдельно и только при экспорте в PDF.
   build: { chunkSizeWarningLimit: 1100 },
   test: {
     include: ["src/**/*.test.ts"],

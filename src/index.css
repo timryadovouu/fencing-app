@@ -532,10 +532,23 @@ h3 {
   gap: 6px;
 }
 
-.fencers li {
-  display: flex;
+/* Строки бойцов и строка добавления — на одной сетке: номер | имя | клуб | действия,
+   чтобы поля стояли строго друг под другом. */
+.fencers li,
+.add-row {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1.5fr) minmax(0, 1fr) 116px;
   align-items: center;
   gap: 8px;
+}
+
+.add-row > :first-child {
+  grid-column: 2;
+}
+
+.add-row > .secondary {
+  width: 100%;
+  padding: 10px 8px;
 }
 
 .num {
@@ -547,11 +560,50 @@ h3 {
 
 .fencer-actions {
   display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.fencers .club-input,
+.add-row .club-input {
+  min-width: 0;
+  width: 100%;
+  color: var(--muted);
+}
+
+.fencers select.club-input,
+.add-row select.club-input {
+  padding: 10px 28px 10px 10px;
+  background-position: right 8px center;
+  font-size: 15px;
+}
+
+.add-line {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.club-list {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.club-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 6px 6px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
 }
 
 .add-row {
-  display: flex;
-  gap: 8px;
   margin-top: 8px;
 }
 
@@ -773,11 +825,38 @@ td {
   white-space: nowrap;
 }
 
+.protocol button.name.movable {
+  width: 100%;
+  border: 0;
+  background: none;
+  text-align: left;
+  font: inherit;
+  font-weight: 500;
+  color: var(--primary);
+}
+
+.card.move-target {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  text-align: left;
+}
+
 .protocol .name .num {
   min-width: 16px;
   text-align: right;
   color: var(--muted);
   font-size: 13px;
+  font-weight: 400;
+}
+
+.protocol .name .club {
+  flex-shrink: 0;
+  max-width: 64px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--muted);
+  font-size: 12px;
   font-weight: 400;
 }
 
@@ -928,6 +1007,33 @@ td {
 }
 
 @media (max-width: 480px) {
+  /* На узком экране: стрелки компактнее, имя и клуб делят место поровну. */
+  .fencers li,
+  .add-row {
+    grid-template-columns: 18px minmax(0, 1fr) minmax(0, 1fr) 84px;
+    gap: 6px;
+  }
+
+  .fencer-actions {
+    gap: 0;
+  }
+
+  .fencer-actions .icon-btn {
+    min-width: 28px;
+    padding: 4px;
+  }
+
+  .fencers select.club-input,
+  .add-row select.club-input {
+    padding: 10px 22px 10px 8px;
+    background-position: right 6px center;
+  }
+
+  .add-row > .secondary {
+    padding: 10px 4px;
+    font-size: 15px;
+  }
+
   .protocol .name {
     max-width: 120px;
     font-size: 14px;

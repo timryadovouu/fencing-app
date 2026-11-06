@@ -23,3 +23,11 @@ export function splitDuplicates(existing: string[], incoming: string[]): { ok: s
   }
   return { ok, duplicates }
 }
+
+// Строка из вставленного списка: «Фамилия Имя, Клуб» (разделитель — запятая, «;» или табуляция).
+export function parseEntry(line: string): { name: string; club?: string } {
+  const m = line.match(/^(.*?)\s*[,;\t]\s*(.*)$/)
+  const name = cleanName(m ? m[1] : line)
+  const club = m ? cleanName(m[2]) : ''
+  return club ? { name, club } : { name }
+}

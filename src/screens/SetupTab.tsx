@@ -1,14 +1,16 @@
+import { useLiveQuery } from 'dexie-react-hooks'
 import { useState } from 'react'
 import { Segmented, Stepper, Toggle } from '../components/controls'
+import { ClubSelect } from '../components/ClubSelect'
 import { RetireSheet } from '../components/RetireSheet'
 import { TextField } from '../components/controls'
-import { modifyTournament, newId, updateSettings, updateTournament, weapons, type Tournament, type TournamentSettings } from '../db'
+import { addClubs, db, modifyTournament, newId, updateSettings, updateTournament, weapons, type Tournament, type TournamentSettings } from '../db'
 import { MAX_ELIMINATED } from '../domain/qualify'
-import { poolName, splitIntoPools } from '../domain/pools'
+import { MAX_POOL_SIZE, poolName, splitIntoPools } from '../domain/pools'
 import { statusLabel } from '../derive'
 import { useI18n } from '../i18n'
 import { go } from '../nav'
-import { splitDuplicates } from '../names'
+import { parseEntry, splitDuplicates } from '../names'
 import { sabreBreakAt } from '../domain/timing'
 
 function shuffle<T>(items: T[]): T[] {
@@ -23,25 +25,32 @@ function shuffle<T>(items: T[]): T[] {
 export function SetupTab({ t }: { t: Tournament }) {
   const { L } = useI18n()
   const [draft, setDraft] = useState('')
+  const [draftClub, setDraftClub] = useState<string | undefined>()
   const [retiring, setRetiring] = useState<string | null>(null)
   const [nameError, setNameError] = useState<string | null>(null)
+  const clubs = useLiveQuery(() => db.clubs.orderBy('name').toArray()) ?? []
   const started = t.pools.length > 0
   const s = t.settings
   const set = (patch: Partial<TournamentSettings>) => updateSettings(t.id, patch)
 
-  // Можно вставить сразу список — по одному бойцу в строке.
+  // Можно вставить сразу список — по одному бойцу в строке, клуб через запятую: «Иванов Алексей, Динамо».
   // Повторы не добавляем: они остаются в поле ввода, чтобы их можно было поправить.
+  // Клуб выбирается рядом; если во вставленном списке указан свой («Имя, Клуб»), он важнее.
   const add = () => {
+    const entries = draft.split('\n').map(parseEntry)
+    const clubOf = new Map(entries.map((e) => [e.name, e.club ?? draftClub]))
     const { ok, duplicates } = splitDuplicates(
       t.fencers.map((f) => f.name),
-      draft.split('\n'),
+      entries.map((e) => e.name),
     )
+    addClubs(ok.map((name) => clubOf.get(name)))
     if (ok.length) {
       modifyTournament(t.id, (cur) => {
-        cur.fencers.push(...ok.map((name) => ({ id: newId(), name })))
+        cur.fencers.push(...ok.map((name) => ({ id: newId(), name, ...(clubOf.get(name) && { club: clubOf.get(name) }) })))
       })
     }
     setDraft(duplicates.join('\n'))
+    if (!duplicates.length) setDraftClub(undefined)
     setNameError(duplicates.length ? L.duplicateName(duplicates.join(', ')) : null)
   }
 
@@ -59,6 +68,11 @@ export function SetupTab({ t }: { t: Tournament }) {
       })
     }
   }
+
+  const setClub = (id: string, club: string) =>
+    modifyTournament(t.id, (cur) => {
+      cur.fencers = cur.fencers.map((f) => (f.id === id ? { ...f, club: club || undefined } : f))
+    })
 
   const remove = (id: string) =>
     modifyTournament(t.id, (cur) => {
@@ -78,7 +92,11 @@ export function SetupTab({ t }: { t: Tournament }) {
 
   const startPools = () => {
     updateTournament(t.id, {
-      pools: splitIntoPools(t.fencers.map((f) => f.id), s.maxPoolSize),
+      pools: splitIntoPools(
+        t.fencers.map((f) => f.id),
+        s.maxPoolSize,
+        (id) => t.fencers.find((f) => f.id === id)?.club,
+      ),
       pistes: [],
       poolBouts: [],
       tableau: null,
@@ -131,6 +149,7 @@ export function SetupTab({ t }: { t: Tournament }) {
                 label={L.fencerN(i + 1)}
                 onCommit={(name) => name && rename(f.id, name)}
               />
+              <ClubSelect value={f.club} clubs={clubs} disabled={started} onChange={(club) => setClub(f.id, club ?? '')} />
               {started && (
                 <span className="fencer-actions">
                   {f.retired && <span className="badge">{statusLabel(L, f)}</span>}
@@ -177,6 +196,7 @@ export function SetupTab({ t }: { t: Tournament }) {
                 }
               }}
             />
+            <ClubSelect value={draftClub} clubs={clubs} onChange={setDraftClub} />
             <button className="secondary" onClick={add} disabled={!draft.trim()}>
               {L.add}
             </button>
@@ -206,7 +226,7 @@ export function SetupTab({ t }: { t: Tournament }) {
             <Stepper
               value={s.maxPoolSize}
               min={3}
-              max={16}
+              max={MAX_POOL_SIZE}
               disabled={started}
               onChange={(maxPoolSize) => set({ maxPoolSize })}
             />

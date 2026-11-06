@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { cellLabel, firstGroupCard, penaltyTouches, toCards, validateBout, type BoutResult } from './bout'
 import { boutOrder } from './boutOrder'
-import { splitIntoPools } from './pools'
+import { canMove, clubClashes, moveToPool, splitIntoPools } from './pools'
 import { computeStats, rank, shuffleTies } from './ranking'
 import { qualify } from './qualify'
 import { deTimer } from './timing'
@@ -223,5 +223,64 @@ describe('cards', () => {
     expect(penaltyTouches(['yellow', 'red', 'red'])).toBe(2)
     expect(penaltyTouches(['yellow', 'yellow'])).toBe(1)
     expect(toCards({ yellow: 1, red: 2 })).toEqual(['yellow', 'red', 'red'])
+  })
+})
+
+describe('moveToPool', () => {
+  it('переносит в конец целевой пульки, исходная не меньше двух', () => {
+    const pools = [['a', 'b', 'c'], ['d', 'e']]
+    expect(moveToPool(pools, 'a', 1)).toEqual([['b', 'c'], ['d', 'e', 'a']])
+    expect(canMove(pools, 'd', 0)).toBe(false) // во второй осталось бы 1
+    expect(moveToPool(pools, 'd', 0)).toBe(pools)
+    expect(canMove(pools, 'a', 0)).toBe(false) // та же пулька
+  })
+})
+
+describe('разведение одноклубников', () => {
+  const club = (x: string) => x.split(':')[1]
+
+  it('без клубов — обычная «змейка»', () => {
+    const seeds = Array.from({ length: 16 }, (_, i) => `f${i + 1}:`)
+    expect(splitIntoPools(seeds, 10, club).map((p) => p.map((x) => x.split(':')[0]).slice(0, 4))).toEqual([
+      ['f1', 'f4', 'f5', 'f8'],
+      ['f2', 'f3', 'f6', 'f7'],
+    ])
+  })
+
+  it('3 бойца клуба А на 2 дорожки — встречаются только двое', () => {
+    const seeds = ['a1:A', 'a2:A', 'b1:B', 'a3:A', 'b2:B', 'c1:C', 'c2:C', 'd1:D']
+    const pools = splitIntoPools(seeds, 4, club)
+    expect(pools.map((p) => p.length)).toEqual([4, 4])
+    const perPool = pools.map((p) => p.filter((x) => club(x) === 'A').length).sort()
+    expect(perPool).toEqual([1, 2])
+    expect(clubClashes(pools, club)).toBe(1)
+  })
+
+  it('неизбежная встреча не мешает развести остальных', () => {
+    // Динамо ×3 на 2 пульки — одна встреча неизбежна; ЦСКА и Спартак должны разойтись.
+    const seeds = ['Анна:Д', 'Борис:Ц', 'Вера:С', 'Глеб:Д', 'Даша:Д', 'Егор:Ц', 'Женя:', 'Зоя:С']
+    expect(clubClashes(splitIntoPools(seeds, 4, club), club)).toBe(1)
+  })
+
+  it('на случайных составах не хуже обычной «змейки»', () => {
+    let seed = 7
+    const rnd = () => ((seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648)
+    for (let run = 0; run < 300; run++) {
+      const n = 6 + Math.floor(rnd() * 40)
+      const clubs = 1 + Math.floor(rnd() * 8)
+      const seeds = Array.from({ length: n }, (_, i) => `f${i}:${rnd() < 0.2 ? '' : 'C' + Math.floor(rnd() * clubs)}`)
+      const max = 4 + Math.floor(rnd() * 5)
+      const aware = splitIntoPools(seeds, max, club)
+      const plain = splitIntoPools(seeds, max)
+      expect(aware.map((p) => p.length)).toEqual(plain.map((p) => p.length))
+      expect(clubClashes(aware, club)).toBeLessThanOrEqual(clubClashes(plain, club))
+    }
+  })
+
+  it('разводит, если это возможно', () => {
+    // «Змейка» положила бы a1 и a2 вместе (посевы 1 и 4), с клубами — нет.
+    const seeds = ['a1:A', 'b1:B', 'c1:C', 'a2:A', 'b2:B', 'c2:C']
+    expect(clubClashes(splitIntoPools(seeds, 3, () => undefined), club)).toBeGreaterThan(0)
+    expect(clubClashes(splitIntoPools(seeds, 3, club), club)).toBe(0)
   })
 })

@@ -8,15 +8,17 @@ interface Props {
   t: Tournament
   pool: FencerId[]
   onCell?: (x: FencerId, y: FencerId) => void // нет — протокол только для просмотра
+  onName?: (x: FencerId) => void // перенос бойца в другую пульку (до первого боя)
 }
 
 // Протокол как на бумаге: строка — бойцы, в клетке — результат бойца строки против бойца столбца.
-export function PoolProtocol({ t, pool, onCell }: Props) {
+export function PoolProtocol({ t, pool, onCell, onName }: Props) {
   const { L } = useI18n()
   const names = namesOf(t)
   const bouts = poolBouts(t, pool)
   const stats = new Map(poolRanking(t, pool).map((r) => [r.fencer, r]))
   const retired = poolRetired(t)
+  const club = (id: FencerId) => fencerOf(t, id)?.club
 
   return (
     <div className="table-scroll">
@@ -46,10 +48,19 @@ export function PoolProtocol({ t, pool, onCell }: Props) {
               <tr key={x} className={retired.has(x) ? 'retired' : ''}>
                 {/* Номер и имя в одной закреплённой ячейке — иначе на узком экране они расходятся и наползают на клетки. */}
                 <td className="sticky name-col">
-                  <span className="name">
-                    <span className="num">{i + 1}</span>
-                    <span className="label">{names.get(x)}</span>
-                  </span>
+                  {onName ? (
+                    <button className="name movable" onClick={() => onName(x)}>
+                      <span className="num">{i + 1}</span>
+                      <span className="label">{names.get(x)}</span>
+                      {club(x) && <span className="club">{club(x)}</span>}
+                    </button>
+                  ) : (
+                    <span className="name">
+                      <span className="num">{i + 1}</span>
+                      <span className="label">{names.get(x)}</span>
+                      {club(x) && <span className="club">{club(x)}</span>}
+                    </span>
+                  )}
                 </td>
                 {pool.map((y, j) => {
                   if (i === j) return <td key={y} className="cell diag" />

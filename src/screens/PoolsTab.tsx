@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { BoutEditor } from '../components/BoutEditor'
-import { TextField } from '../components/controls'
-import { modifyTournament, retireFencer, updateTournament, type Tournament } from '../db'
+import { Sheet, TextField } from '../components/controls'
+import { modifyTournament, moveFencerToPool, retireFencer, updateTournament, type Tournament } from '../db'
 import { findBout, namesOf, overallRanking, pisteOf, poolBouts, poolProgress, poolRetired, poolSchedule, poolSize, qualification } from '../derive'
 import type { BoutResult, FencerId } from '../domain/bout'
-import { poolName } from '../domain/pools'
+import { canMove, poolName } from '../domain/pools'
 import { formatSigned } from '../format'
 import { formatRatio, useI18n } from '../i18n'
 import { go } from '../nav'
@@ -14,6 +14,7 @@ export function PoolsTab({ t }: { t: Tournament }) {
   const { L } = useI18n()
   const [poolIndex, setPoolIndex] = useState(0)
   const [editing, setEditing] = useState<[FencerId, FencerId] | null>(null)
+  const [moving, setMoving] = useState<FencerId | null>(null)
 
   if (t.pools.length === 0) {
     return (
@@ -28,6 +29,10 @@ export function PoolsTab({ t }: { t: Tournament }) {
 
   const names = namesOf(t)
   const locked = !!t.tableau
+  // Состав пулек можно править вручную, пока не введено ни одного боя.
+  const clubOf = (id: FencerId) => t.fencers.find((f) => f.id === id)?.club?.trim().toLocaleLowerCase()
+  const sameClub = (x: FencerId, y: FencerId) => !!clubOf(x) && clubOf(x) === clubOf(y)
+  const canRearrange = !locked && t.pools.length > 1 && t.poolBouts.length === 0
   const poolIndexSafe = Math.min(poolIndex, t.pools.length - 1)
   const pool = t.pools[poolIndexSafe]
   const bouts = poolBouts(t, pool)
@@ -100,7 +105,8 @@ export function PoolsTab({ t }: { t: Tournament }) {
           />
         </label>
         {locked && <p className="hint">{L.protocolLocked}</p>}
-        <PoolProtocol t={t} pool={pool} onCell={open} />
+        {canRearrange && <p className="hint">{L.moveHint}</p>}
+        <PoolProtocol t={t} pool={pool} onCell={open} onName={canRearrange ? setMoving : undefined} />
         <p className="hint">{L.cellHint}</p>
       </section>
 
@@ -177,6 +183,35 @@ export function PoolsTab({ t }: { t: Tournament }) {
           </button>
         )}
       </section>
+
+      {moving && (
+        <Sheet title={L.moveFencer(names.get(moving) ?? '')} onClose={() => setMoving(null)}>
+          <ul className="list">
+            {t.pools.map((p, i) =>
+              p.includes(moving) ? null : (
+                <li key={i}>
+                  <button
+                    className="card move-target"
+                    disabled={!canMove(t.pools, moving, i)}
+                    onClick={() => {
+                      moveFencerToPool(t.id, moving, i)
+                      setMoving(null)
+                    }}
+                  >
+                    <span className="card-title">
+                      {L.pool(poolName(i))} · {L.piste(pisteOf(t, i))}
+                    </span>
+                    <span className="card-meta">
+                      {L.fencersCount(p.length)}
+                      {clubOf(moving) && ` · ${L.clubmates(p.filter((x) => sameClub(x, moving)).length)}`}
+                    </span>
+                  </button>
+                </li>
+              ),
+            )}
+          </ul>
+        </Sheet>
+      )}
 
       {editing && (
         <BoutEditor

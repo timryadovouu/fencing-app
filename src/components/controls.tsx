@@ -105,11 +105,17 @@ export function Segmented<T extends string | number>({
 export function TextField({
   value,
   label,
+  placeholder,
+  className,
+  autoFocus,
   disabled,
   onCommit,
 }: {
   value: string
   label?: string
+  placeholder?: string
+  className?: string
+  autoFocus?: boolean
   disabled?: boolean
   onCommit: (v: string) => void
 }) {
@@ -127,6 +133,9 @@ export function TextField({
     <input
       value={shown}
       aria-label={label}
+      placeholder={placeholder}
+      className={className}
+      autoFocus={autoFocus}
       disabled={disabled}
       onFocus={() => {
         setDraft(value)

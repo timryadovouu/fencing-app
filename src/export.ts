@@ -1,5 +1,5 @@
 import type { CanvasElement, Content, TableCell, TDocumentDefinitions } from 'pdfmake/interfaces'
-import { db, normalize, type Tournament } from './db'
+import { addClubs, db, normalize, type Club, type Tournament } from './db'
 import { bracketOf, fencerOf, finalStandings, findBout, namesOf, overallRanking, pisteOf, poolBouts, poolRanking, poolRetired, statusLabel } from './derive'
 import { cellLabel } from './domain/bout'
 import { poolName } from './domain/pools'
@@ -308,19 +308,21 @@ export async function exportPdf(t: Tournament, L: Dict) {
 
 // Один формат и для резервной копии, и для обмена одним турниром: всё — настройки, оружие,
 // участники, все бои пулек и олимпийки, снятия и карточки.
-function fileContent(tournaments: Tournament[]): string {
+function fileContent(tournaments: Tournament[], clubs?: Club[]): string {
   const clean = tournaments.map((t) => {
     const copy = { ...t }
     delete copy.pristine
     return copy
   })
-  return JSON.stringify({ app: 'fencing-app', version: 1, exportedAt: new Date().toISOString(), tournaments: clean }, null, 2)
+  const data = { app: 'fencing-app', version: 1, exportedAt: new Date().toISOString(), tournaments: clean }
+  return JSON.stringify(clubs ? { ...data, clubs: clubs.map((c) => c.name) } : data, null, 2)
 }
 
 export async function exportBackup() {
   const tournaments = await db.tournaments.filter((t) => !t.pristine).toArray()
+  const clubs = await db.clubs.orderBy('name').toArray()
   const stamp = new Date().toISOString().slice(0, 10)
-  await saveFile(`fencing-backup-${stamp}.json`, 'application/json', fileContent(tournaments))
+  await saveFile(`fencing-backup-${stamp}.json`, 'application/json', fileContent(tournaments, clubs))
 }
 
 export function exportJson(t: Tournament) {
@@ -340,5 +342,11 @@ export async function importBackup(file: File, L: Dict): Promise<string[]> {
   )
   if (valid.length === 0) throw new Error(L.backupEmpty)
   await db.tournaments.bulkPut(valid.map((t) => ({ ...normalize(t), pristine: false })))
+  // Клубы из копии и из бойцов присланного старта пополняют банк.
+  const clubs: unknown[] = Array.isArray(data?.clubs) ? data.clubs : []
+  await addClubs([
+    ...clubs.filter((c): c is string => typeof c === 'string'),
+    ...valid.flatMap((t) => (Array.isArray(t.fencers) ? t.fencers.map((f) => f?.club) : [])),
+  ])
   return valid.map((t) => t.id)
 }
